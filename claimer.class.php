@@ -6,6 +6,10 @@ class Claimer {
   private $claim_url = CLAIM_URL;
   private $active_users = array();
   private $current_email = "";
+  public $claims_success = 0;
+  public $claims_failed = 0;
+  public $deactivated_users = 0;
+  
 
   
   public function __construct($claim_number) {
@@ -13,6 +17,7 @@ class Claimer {
     $this->get_active_users();
     $this->claim_points();
     $this->clean_users();
+    return "Complete";
   }
   
   private function get_active_users() {
@@ -68,21 +73,24 @@ class Claimer {
     if(is_array($match)) {
       if(!empty($match[0])) {
         $this->log_failed_claim($match[0]);
+        return;
       }
     }
+    $this->claims_success += 1;
   }
   
   private function log_failed_claim($error_message) {
     $error_message = mysql_real_escape_string($error_message);
     $query = "INSERT INTO failed_claims (email, error_message, error_date) VALUES ('{$this->current_email}', '$error_message', CURDATE())";
     mysql_query($query);
+    $this->claims_failed += 1;
   }
 
   private function clean_users() {
-    $query = "SELECT email, COUNT(email) FROM failed_claims GROUP BY email";
+    $query = "SELECT fc.email, COUNT(fc.email) FROM failed_claims as fc JOIN users AS users ON fc.email=users.email WHERE users.active = 1 GROUP BY fc.email";
     $res = mysql_query($query);
     while($row = mysql_fetch_assoc($res)) {
-        if($row['COUNT(email)'] >= 4) {
+        if($row['COUNT(fc.email)'] >= 4) {
           $this->deactivate_email($row['email']);
         }
     }
@@ -91,10 +99,9 @@ class Claimer {
   private function deactivate_email($email) {
     $query = "UPDATE users SET active = 0 WHERE email = '$email'";
     mysql_query($query);
+    $this->deactivated_users += 1;
   }
     
 }
-
-
 
 ?>
